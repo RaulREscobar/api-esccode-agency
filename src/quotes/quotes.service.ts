@@ -17,7 +17,6 @@ export class QuotesService {
     email: true,
     role: true,
     isActive: true,
-    assignedProjectId: true,
     createdAt: true,
     updatedAt: true,
   };

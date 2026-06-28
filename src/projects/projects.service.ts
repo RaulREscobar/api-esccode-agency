@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -20,19 +20,31 @@ export class ProjectsService {
     email: true,
     role: true,
     isActive: true,
-    assignedProjectId: true,
     createdAt: true,
     updatedAt: true,
   };
 
-  async findAll() {
+  async findAllForUser(userId: string, role: string) {
+    if (role === 'OWNER') {
+      return this.prisma.project.findMany({
+        include: { workType: true, createdBy: { select: this.publicUserSelect } },
+        orderBy: { updatedAt: 'desc' },
+      });
+    }
+
     return this.prisma.project.findMany({
+      where: {
+        OR: [
+          { createdById: userId },
+          { assignedUsers: { some: { id: userId } } },
+        ],
+      },
       include: { workType: true, createdBy: { select: this.publicUserSelect } },
       orderBy: { updatedAt: 'desc' },
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string, role?: string) {
     const project = await this.prisma.project.findUnique({
       where: { id },
       include: {
@@ -43,11 +55,21 @@ export class ProjectsService {
         fieldValues: { include: { fieldDefinition: true } },
         driveFolders: true,
         statusHistory: { include: { changedBy: { select: this.publicUserSelect } } },
+        assignedUsers: true,
       },
     });
     if (!project) {
       throw new NotFoundException('Proyecto no encontrado');
     }
+
+    if (role && role !== 'OWNER') {
+      const isCreatedBy = project.createdById === userId;
+      const isAssigned = project.assignedUsers.some((u) => u.id === userId);
+      if (!isCreatedBy && !isAssigned) {
+        throw new ForbiddenException('No tienes acceso a este proyecto');
+      }
+    }
+
     return project;
   }
 
@@ -58,6 +80,11 @@ export class ProjectsService {
     }
     if (dto.status === ProjectStatus.INICIO && !dto.estimatedDeliveryDate) {
       throw new BadRequestException('La fecha estimada de finalización es obligatoria en estado INICIO');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Usuario creador no encontrado');
     }
 
     const created = await this.prisma.project.create({
@@ -72,6 +99,7 @@ export class ProjectsService {
         priority: dto.priority,
         comments: dto.comments,
         createdById: userId,
+        assignedUsers: user.role === 'ADMIN' ? { connect: { id: userId } } : undefined,
       },
     });
 

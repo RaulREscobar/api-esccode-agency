@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, IsArray, MinLength } from 'class-validator';
 import { UserRole } from '@prisma/client';
 
 export class PatchUserDto {
@@ -19,6 +19,7 @@ export class PatchUserDto {
   isActive?: boolean;
 
   @IsOptional()
-  @IsUUID()
-  assignedProjectId?: string | null;
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  assignedProjectIds?: string[];
 }

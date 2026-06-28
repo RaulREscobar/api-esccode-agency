@@ -6,8 +6,17 @@ import { ProjectStatus, QuoteStatus, TaskStatus } from '@prisma/client';
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  async getSummary() {
+  async getSummary(userId: string, role: string) {
     const now = new Date();
+    
+    // Filtro condicional por rol de usuario
+    const projectFilter = role === 'OWNER' ? {} : {
+      OR: [
+        { createdById: userId },
+        { assignedUsers: { some: { id: userId } } },
+      ],
+    };
+
     const [
       totalProjects,
       activeProjects,
@@ -18,15 +27,31 @@ export class DashboardService {
       tasksInProgress,
       upcomingDeliveries,
     ] = await this.prisma.$transaction([
-      this.prisma.project.count(),
-      this.prisma.project.count({ where: { status: ProjectStatus.EN_PROCESO } }),
-      this.prisma.project.count({ where: { status: ProjectStatus.FINALIZADA } }),
-      this.prisma.project.count({ where: { status: ProjectStatus.ESPERANDO_MATERIAL } }),
-      this.prisma.quote.count({ where: { status: QuoteStatus.COTIZACION_PENDIENTE } }),
-      this.prisma.task.count({ where: { status: TaskStatus.PENDIENTE } }),
-      this.prisma.task.count({ where: { status: TaskStatus.EN_PROCESO } }),
+      this.prisma.project.count({ where: projectFilter }),
+      this.prisma.project.count({ where: { ...projectFilter, status: ProjectStatus.EN_PROCESO } }),
+      this.prisma.project.count({ where: { ...projectFilter, status: ProjectStatus.FINALIZADA } }),
+      this.prisma.project.count({ where: { ...projectFilter, status: ProjectStatus.ESPERANDO_MATERIAL } }),
+      this.prisma.quote.count({
+        where: {
+          status: QuoteStatus.COTIZACION_PENDIENTE,
+          project: projectFilter,
+        },
+      }),
+      this.prisma.task.count({
+        where: {
+          status: TaskStatus.PENDIENTE,
+          project: projectFilter,
+        },
+      }),
+      this.prisma.task.count({
+        where: {
+          status: TaskStatus.EN_PROCESO,
+          project: projectFilter,
+        },
+      }),
       this.prisma.project.findMany({
         where: {
+          ...projectFilter,
           estimatedDeliveryDate: { gte: now },
           status: { not: ProjectStatus.FINALIZADA },
         },

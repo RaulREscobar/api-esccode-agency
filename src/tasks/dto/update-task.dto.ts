@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 import { PriorityLevel, TaskStatus } from '@prisma/client';
 
 export class UpdateTaskDto {
@@ -17,4 +17,8 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsEnum(PriorityLevel)
   priority?: PriorityLevel;
+
+  @IsOptional()
+  @IsUUID()
+  assignedToId?: string;
 }

@@ -18,7 +18,10 @@ export class UsersService {
   }
 
   async findById(id: string) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { assignedProjects: true },
+    });
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
     }
@@ -31,7 +34,10 @@ export class UsersService {
   }
 
   async findAll() {
-    const users = await this.prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
+    const users = await this.prisma.user.findMany({
+      include: { assignedProjects: true },
+      orderBy: { createdAt: 'desc' },
+    });
     return users.map((user) => this.toPublicUser(user));
   }
 
@@ -59,10 +65,12 @@ export class UsersService {
       throw new BadRequestException('El email ya está en uso');
     }
 
-    if (createUserDto.assignedProjectId) {
-      const project = await this.prisma.project.findUnique({ where: { id: createUserDto.assignedProjectId } });
-      if (!project) {
-        throw new NotFoundException('Proyecto asignado no encontrado');
+    if (createUserDto.assignedProjectIds && createUserDto.assignedProjectIds.length > 0) {
+      const count = await this.prisma.project.count({
+        where: { id: { in: createUserDto.assignedProjectIds } },
+      });
+      if (count !== createUserDto.assignedProjectIds.length) {
+        throw new NotFoundException('Uno o más proyectos asignados no fueron encontrados');
       }
     }
 
@@ -73,8 +81,11 @@ export class UsersService {
         passwordHash,
         role: createUserDto.role,
         isActive: createUserDto.isActive ?? true,
-        assignedProjectId: createUserDto.assignedProjectId || null,
+        assignedProjects: createUserDto.assignedProjectIds
+          ? { connect: createUserDto.assignedProjectIds.map((id) => ({ id })) }
+          : undefined,
       },
+      include: { assignedProjects: true },
     });
     return this.toPublicUser(user);
   }
@@ -101,17 +112,23 @@ export class UsersService {
       data.isActive = patchUserDto.isActive;
     }
 
-    if (patchUserDto.assignedProjectId !== undefined) {
-      if (patchUserDto.assignedProjectId !== null) {
-        const project = await this.prisma.project.findUnique({ where: { id: patchUserDto.assignedProjectId } });
-        if (!project) {
-          throw new NotFoundException('Proyecto asignado no encontrado');
-        }
+    if (patchUserDto.assignedProjectIds !== undefined) {
+      const count = await this.prisma.project.count({
+        where: { id: { in: patchUserDto.assignedProjectIds } },
+      });
+      if (count !== patchUserDto.assignedProjectIds.length) {
+        throw new NotFoundException('Uno o más proyectos asignados no fueron encontrados');
       }
-      data.assignedProjectId = patchUserDto.assignedProjectId;
+      data.assignedProjects = {
+        set: patchUserDto.assignedProjectIds.map((id) => ({ id })),
+      };
     }
 
-    const updated = await this.prisma.user.update({ where: { id }, data });
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data,
+      include: { assignedProjects: true },
+    });
     return this.toPublicUser(updated);
   }
 

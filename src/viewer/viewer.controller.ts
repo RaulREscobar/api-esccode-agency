@@ -14,9 +14,9 @@ export class ViewerController {
 
   @Get('project')
   async getProject(@CurrentUser() user: any) {
-    if (!user.assignedProjectId) {
+    if (!user.assignedProjects || user.assignedProjects.length === 0) {
       return { message: 'No hay proyecto asignado' };
     }
-    return this.projectsService.findOne(user.assignedProjectId);
+    return this.projectsService.findOne(user.assignedProjects[0].id);
   }
 }

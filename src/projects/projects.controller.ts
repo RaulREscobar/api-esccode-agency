@@ -15,8 +15,8 @@ export class ProjectsController {
 
   @Get()
   @Roles(UserRole.OWNER, UserRole.ADMIN)
-  findAll() {
-    return this.projectsService.findAll();
+  findAll(@Request() req: any) {
+    return this.projectsService.findAllForUser(req.user.id, req.user.role);
   }
 
   @Post()
@@ -27,8 +27,8 @@ export class ProjectsController {
 
   @Get(':id')
   @Roles(UserRole.OWNER, UserRole.ADMIN)
-  findOne(@Param('id') id: string) {
-    return this.projectsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req: any) {
+    return this.projectsService.findOne(id, req.user.id, req.user.role);
   }
 
   @Patch(':id')

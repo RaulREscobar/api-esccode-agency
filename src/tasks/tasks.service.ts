@@ -14,6 +14,31 @@ export class TasksService {
         project: {
           select: { id: true, name: true, clientDisplayName: true, status: true },
         },
+        assignedTo: { select: { id: true, email: true, role: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  async findAllForUser(userId: string, role: string) {
+    if (role === 'OWNER') {
+      return this.findAll();
+    }
+
+    return this.prisma.task.findMany({
+      where: {
+        project: {
+          OR: [
+            { createdById: userId },
+            { assignedUsers: { some: { id: userId } } }
+          ]
+        }
+      },
+      include: {
+        project: {
+          select: { id: true, name: true, clientDisplayName: true, status: true },
+        },
+        assignedTo: { select: { id: true, email: true, role: true } },
       },
       orderBy: { updatedAt: 'desc' },
     });
@@ -21,7 +46,11 @@ export class TasksService {
 
   async findAllForProject(projectId: string) {
     await this.ensureProject(projectId);
-    return this.prisma.task.findMany({ where: { projectId }, orderBy: { createdAt: 'asc' } });
+    return this.prisma.task.findMany({
+      where: { projectId },
+      include: { assignedTo: { select: { id: true, email: true, role: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   async findOne(id: string) {
@@ -31,6 +60,7 @@ export class TasksService {
         project: {
           select: { id: true, name: true, clientDisplayName: true, status: true },
         },
+        assignedTo: { select: { id: true, email: true, role: true } },
       },
     });
     if (!task) {
@@ -44,7 +74,28 @@ export class TasksService {
     if (project.status === 'FINALIZADA') {
       throw new BadRequestException('No se pueden crear tareas en un proyecto finalizado');
     }
-    const task = await this.prisma.task.create({ data: { ...dto, projectId } });
+
+    if (dto.assignedToId) {
+      const assignedUser = await this.prisma.user.findUnique({
+        where: { id: dto.assignedToId },
+        include: { assignedProjects: true },
+      });
+      if (!assignedUser) {
+        throw new NotFoundException('Usuario asignado no encontrado');
+      }
+      if (assignedUser.role !== 'OWNER') {
+        const isCreator = project.createdById === dto.assignedToId;
+        const isAssigned = assignedUser.assignedProjects.some((p) => p.id === projectId);
+        if (!isCreator && !isAssigned) {
+          throw new BadRequestException('El usuario asignado no pertenece a este proyecto');
+        }
+      }
+    }
+
+    const task = await this.prisma.task.create({
+      data: { ...dto, projectId },
+      include: { assignedTo: { select: { id: true, email: true, role: true } } },
+    });
     await this.recalculateProjectProgress(projectId);
     return task;
   }
@@ -58,7 +109,29 @@ export class TasksService {
     if (project.status === 'FINALIZADA') {
       throw new BadRequestException('No se pueden editar tareas en un proyecto finalizado');
     }
-    const task = await this.prisma.task.update({ where: { id }, data: dto });
+
+    if (dto.assignedToId) {
+      const assignedUser = await this.prisma.user.findUnique({
+        where: { id: dto.assignedToId },
+        include: { assignedProjects: true },
+      });
+      if (!assignedUser) {
+        throw new NotFoundException('Usuario asignado no encontrado');
+      }
+      if (assignedUser.role !== 'OWNER') {
+        const isCreator = project.createdById === dto.assignedToId;
+        const isAssigned = assignedUser.assignedProjects.some((p) => p.id === existing.projectId);
+        if (!isCreator && !isAssigned) {
+          throw new BadRequestException('El usuario asignado no pertenece a este proyecto');
+        }
+      }
+    }
+
+    const task = await this.prisma.task.update({
+      where: { id },
+      data: dto,
+      include: { assignedTo: { select: { id: true, email: true, role: true } } },
+    });
     await this.recalculateProjectProgress(existing.projectId);
     return task;
   }
