@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  VIEWER
+}
+
+enum ProjectStatus {
+  INICIO
+  EN_PROCESO
+  FINALIZADA
+  ESPERANDO_MATERIAL
+}
+
+enum QuoteStatus {
+  COTIZACION_PENDIENTE
+  COTIZACION_FINALIZADA
+  COTIZACION_VENCIDA
+  COTIZACION_APROBADA
+}
+
+enum TaskStatus {
+  PENDIENTE
+  EN_PROCESO
+  COMPLETADA
+}
+
+enum PriorityLevel {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+model User {
+  id                String             @id @default(uuid()) @db.Uuid
+  email             String             @unique
+  passwordHash      String
+  refreshTokenHash  String?
+  role              UserRole           @default(ADMIN)
+  isActive          Boolean            @default(true)
+  assignedProject   Project?           @relation("AssignedViewer", fields: [assignedProjectId], references: [id])
+  assignedProjectId String?            @db.Uuid
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  createdProjects   Project[]          @relation("ProjectCreator")
+  createdQuotes     Quote[]            @relation("QuoteCreator")
+  statusChanges     ProjectStatusHistory[] @relation("StatusChanger")
+  auditLogs         AuditLog[]         @relation("AuditActor")
+  comments          ProjectComment[]   @relation("CommentAuthor")
+}
+
+model WorkType {
+  id          String      @id @default(uuid()) @db.Uuid
+  name        String      @unique
+  category    String?
+  basePrice   Float
+  isActive    Boolean     @default(true)
+  allowsExtras Boolean    @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  projects    Project[]
+}
+
+model Project {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  name                  String
+  status                ProjectStatus            @default(INICIO)
+  startDate             DateTime?
+  estimatedDeliveryDate DateTime?
+  workType              WorkType                 @relation(fields: [workTypeId], references: [id])
+  workTypeId            String                   @db.Uuid
+  clientDisplayName     String
+  quoteStatus           QuoteStatus              @default(COTIZACION_PENDIENTE)
+  progress              Int                      @default(0)
+  priority              PriorityLevel            @default(MEDIA)
+  comments              String?
+  driveRootFolderId     String?
+  driveRootFolderUrl    String?
+  createdBy            User                     @relation("ProjectCreator", fields: [createdById], references: [id])
+  createdById          String                   @db.Uuid
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  statusHistory        ProjectStatusHistory[]
+  tasks                Task[]
+  quotes               Quote[]
+  fieldValues          ProjectFieldValue[]
+  driveFolders         DriveFolder[]
+  assignedViewers      User[]                   @relation("AssignedViewer")
+  projectComments      ProjectComment[]
+
+  @@index([status])
+  @@index([quoteStatus])
+  @@index([priority])
+  @@index([estimatedDeliveryDate])
+}
+
+model ProjectStatusHistory {
+  id            String        @id @default(uuid()) @db.Uuid
+  project       Project       @relation(fields: [projectId], references: [id])
+  projectId     String        @db.Uuid
+  previousStatus ProjectStatus
+  nextStatus    ProjectStatus
+  changedBy     User          @relation("StatusChanger", fields: [changedById], references: [id])
+  changedById   String        @db.Uuid
+  note          String?
+  createdAt     DateTime      @default(now())
+}
+
+model Task {
+  id          String        @id @default(uuid()) @db.Uuid
+  project     Project       @relation(fields: [projectId], references: [id])
+  projectId   String        @db.Uuid
+  title       String
+  description String?
+  status      TaskStatus    @default(PENDIENTE)
+  priority    PriorityLevel @default(MEDIA)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Quote {
+  id               String       @id @default(uuid()) @db.Uuid
+  project          Project      @relation(fields: [projectId], references: [id])
+  projectId        String       @db.Uuid
+  version          Int
+  status           QuoteStatus  @default(COTIZACION_PENDIENTE)
+  issueDate        DateTime
+  expirationDate   DateTime
+  subtotal         Float
+  extrasTotal      Float
+  total            Float
+  generatedFileUrl String?
+  createdBy        User         @relation("QuoteCreator", fields: [createdById], references: [id])
+  createdById      String       @db.Uuid
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  items            QuoteItem[]
+
+  @@index([status])
+  @@index([version])
+}
+
+model QuoteItem {
+  id        String  @id @default(uuid()) @db.Uuid
+  quote     Quote   @relation(fields: [quoteId], references: [id])
+  quoteId   String  @db.Uuid
+  name      String
+  description String?
+  unitPrice Float
+  quantity  Int
+  total     Float
+}
+
+model ProjectFieldDefinition {
+  id          String               @id @default(uuid()) @db.Uuid
+  key         String               @unique
+  label       String
+  type        String
+  isSensitive Boolean              @default(false)
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  fieldValues ProjectFieldValue[]
+}
+
+model ProjectFieldValue {
+  id               String                  @id @default(uuid()) @db.Uuid
+  project          Project                 @relation(fields: [projectId], references: [id])
+  projectId        String                  @db.Uuid
+  fieldDefinition  ProjectFieldDefinition  @relation(fields: [fieldDefinitionId], references: [id])
+  fieldDefinitionId String                 @db.Uuid
+  valueEncrypted   String?
+  valuePlain       String?
+  displayOrder     Int                     @default(0)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+}
+
+model DriveFolder {
+  id                String    @id @default(uuid()) @db.Uuid
+  project           Project   @relation(fields: [projectId], references: [id])
+  projectId         String    @db.Uuid
+  name              String
+  folderType        String
+  driveFolderId     String
+  driveUrl          String
+  parentDriveFolderId String?
+  createdAt         DateTime  @default(now())
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorUser    User?    @relation("AuditActor", fields: [actorUserId], references: [id])
+  actorUserId  String?  @db.Uuid
+  action       String
+  entityType   String
+  entityId     String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+}
+
+model ProjectComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String   @db.Uuid
+  author    User     @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String   @db.Uuid
+  content   String
+  createdAt DateTime @default(now())
+}
