@@ -5,12 +5,12 @@
   "scripts": {
     "start": "nest start",
     "start:dev": "nest start --watch",
-    "build": "tsc nest build",
+    "build": "nest build",
     "lint": "eslint '{src,test}/**/*.ts' --fix",
     "format": "prettier --write '{src,test}/**/*.{ts,js,json,md}'",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
-    "seed": "ts-node --transpile-only prisma/seed.ts"
+    "seed": "node --loader ts-node/esm prisma/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
