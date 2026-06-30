@@ -5,7 +5,7 @@
   "scripts": {
     "start": "nest start",
     "start:dev": "nest start --watch",
-    "build": "nest build",
+    "build": "tsc nest build",
     "lint": "eslint '{src,test}/**/*.ts' --fix",
     "format": "prettier --write '{src,test}/**/*.{ts,js,json,md}'",
     "prisma:generate": "prisma generate",
