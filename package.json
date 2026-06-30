@@ -2,6 +2,9 @@
   "name": "esccode-backend",
   "version": "0.0.1",
   "private": true,
+  "prisma": {
+    "seed": "node dist/prisma/seed.js"
+  },
   "scripts": {
     "start": "nest start",
     "start:dev": "nest start --watch",
